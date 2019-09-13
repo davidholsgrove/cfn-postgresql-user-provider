@@ -18,6 +18,11 @@ request_schema = {
     ],
     "properties": {
         "Database": {"$ref": "#/definitions/connection"},
+        "Name": {
+            "type": "string",
+            "pattern": "^[_A-Za-z][A-Za-z0-9_$]*$",
+            "description": "the name of the database to create"
+        },
         "User": {
             "type": "string",
             "pattern": "^[_A-Za-z][A-Za-z0-9_$]*$",
@@ -133,6 +138,10 @@ class PostgreSQLUser(ResourceProvider):
         return self.get('User')
 
     @property
+    def name(self):
+        return self.get('Name') or self.get('User')
+
+    @property
     def host(self):
         return self.get('Database', {}).get('Host', None)
 
@@ -177,7 +186,7 @@ class PostgreSQLUser(ResourceProvider):
     @property
     def url(self):
         if self.with_database:
-            return 'postgresql:%s:%s:%s:%s:%s' % (self.host, self.port, self.dbname, self.user, self.user)
+            return 'postgresql:%s:%s:%s:%s:%s' % (self.host, self.port, self.dbname, self.name, self.user)
         else:
             return 'postgresql:%s:%s:%s::%s' % (self.host, self.port, self.dbname, self.user)
 
@@ -197,7 +206,7 @@ class PostgreSQLUser(ResourceProvider):
     def db_exists(self):
         with self.connection.cursor() as cursor:
             cursor.execute(
-                "SELECT FROM pg_catalog.pg_database WHERE datname = %s", [self.user])
+                "SELECT FROM pg_catalog.pg_database WHERE datname = %s", [self.name])
             rows = cursor.fetchall()
             return len(rows) > 0
 
@@ -219,13 +228,13 @@ class PostgreSQLUser(ResourceProvider):
 
     def drop_database(self):
         if self.deletion_policy == 'Drop':
-            log.info('drop database of %s', self.user)
+            log.info('drop database of %s', self.name)
             with self.connection.cursor() as cursor:
                 cursor.execute('GRANT %s TO %s', [
                     AsIs(self.user), AsIs(self.dbowner)])
-                cursor.execute('DROP DATABASE %s', [AsIs(self.user)])
+                cursor.execute('DROP DATABASE %s', [AsIs(self.name)])
         else:
-            log.info('not dropping database %s', self.user)
+            log.info('not dropping database %s', self.name)
 
     def update_password(self):
         log.info('update password of role %s', self.user)
@@ -240,24 +249,24 @@ class PostgreSQLUser(ResourceProvider):
                 AsIs(self.user), self.user_password])
 
     def create_database(self):
-        log.info('create database %s', self.user)
+        log.info('create database %s', self.name)
         with self.connection.cursor() as cursor:
             cursor.execute('GRANT %s TO %s', [
-                AsIs(self.user), AsIs(self.dbowner)])
+                AsIs(self.name), AsIs(self.dbowner)])
             cursor.execute('CREATE DATABASE %s OWNER %s', [
-                AsIs(self.user), AsIs(self.user)])
+                AsIs(self.name), AsIs(self.user)])
             cursor.execute('REVOKE %s FROM %s', [
-                AsIs(self.user), AsIs(self.dbowner)])
+                AsIs(self.name), AsIs(self.dbowner)])
 
     def grant_ownership(self):
-        log.info('grant ownership on %s to %s', self.user, self.user)
+        log.info('grant ownership on %s to %s', self.name, self.user)
         with self.connection.cursor() as cursor:
             cursor.execute('GRANT %s TO %s', [
-                AsIs(self.user), AsIs(self.dbowner)])
+                AsIs(self.name), AsIs(self.dbowner)])
             cursor.execute('ALTER DATABASE %s OWNER TO %s', [
-                AsIs(self.user), AsIs(self.user)])
+                AsIs(self.name), AsIs(self.user)])
             cursor.execute('REVOKE %s FROM %s', [
-                AsIs(self.user), AsIs(self.dbowner)])
+                AsIs(self.name), AsIs(self.dbowner)])
 
     def drop(self):
         if self.with_database and self.db_exists():

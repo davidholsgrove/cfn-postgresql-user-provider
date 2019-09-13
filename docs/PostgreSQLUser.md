@@ -9,6 +9,7 @@ To declare this entity in your AWS CloudFormation template, use the following sy
 Type: Custom::PostgreSQLUser
 Properties:
   Name: String
+  User: String
   Password: String
   PasswordParameterName: String
   WithDatabase: true/false
@@ -28,7 +29,8 @@ Properties:
 ## Properties
 You can specify the following properties:
 
-- `Name` - of the user to create
+- `Name` - of the database to create
+- `User` - of the user to create
 - `Password` - of the user
 - `PasswordParameterName` - name of the parameter in the store containing the password of the user
 - `WithDatabase` - if a database is to be created with the same name, defaults to true
@@ -43,6 +45,7 @@ You can specify the following properties:
 -- `Password` - to identify the user with.
 -- `PasswordParameterName` - name of the parameter in the store containing the password of the user
 
+If `Name` is not specified for the database, the `User` value is used as the database name to create `WithDatabase`.
 Either `DBName` or `DBNameParameterName`, `User` or `UserParameterName`, `Password` or `PasswordParameterName` is required.
 
 ## Return values
