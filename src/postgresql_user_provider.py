@@ -32,6 +32,11 @@ request_schema = {
             "minLength": 1,
             "description": "the name of the password in the Parameter Store."
         },
+        "GetParametersFromSSM": {
+            "type": "boolean",
+            "default": False,
+            "description": "treat all parameters as named SSM Parameters to retrieve"
+        },
         "WithDatabase": {
             "type": "boolean",
             "default": True,
@@ -96,47 +101,69 @@ class PostgreSQLUser(ResourceProvider):
     def convert_property_types(self):
         self.heuristic_convert_property_types(self.properties)
 
-    def get_password(self, name):
+    def get_ssm_parameter(self, name):
         try:
+            log.debug(f"Retrieving Parameter {name} from SSM")
             response = self.ssm.get_parameter(Name=name, WithDecryption=True)
             return response['Parameter']['Value']
         except ClientError as e:
             raise ValueError('Could not obtain password using name {}, {}'.format(name, e))
 
     @property
+    def retrieve_ssm_params(self):
+        return self.get('GetParametersFromSSM', False)
+
+    @property
     def user_password(self):
-        if 'Password' in self.properties:
-            return self.get('Password')
-        else:
-            return self.get_password(self.get('PasswordParameterName'))
+        # For backwards compatibility, accept password ssm parameter name from both
+        password = self.get('PasswordParameterName') or self.get('Password')
+        if self.retrieve_ssm_params or self.get('PasswordParameterName'):
+            password = self.get_ssm_parameter(password)
+        return password
 
     @property
     def dbowner_password(self):
         db = self.get('Database')
-        if 'Password' in db:
-            return db.get('Password')
-        else:
-            return self.get_password(db['PasswordParameterName'])
+        # For backwards compatibility, accept password ssm parameter name from both
+        dbowner_password = db.get('PasswordParameterName') or db.get('Password')
+        if self.retrieve_ssm_params or db.get('PasswordParameterName'):
+            dbowner_password = self.get_ssm_parameter(dbowner_password)
+        return dbowner_password
 
     @property
     def user(self):
-        return self.get('User')
+        user = self.get('User')
+        if self.retrieve_ssm_params:
+            user = self.get_ssm_parameter(user)
+        return user
 
     @property
     def host(self):
-        return self.get('Database', {}).get('Host', None)
+        host = self.get('Database', {}).get('Host', None)
+        if self.retrieve_ssm_params:
+            host = self.get_ssm_parameter(host)
+        return host
 
     @property
     def port(self):
-        return self.get('Database', {}).get('Port', 5432)
+        port = self.get('Database', {}).get('Port', 5432)
+        if self.retrieve_ssm_params:
+            port = self.get_ssm_parameter(port)
+        return port
 
     @property
     def dbname(self):
-        return self.get('Database', {}).get('DBName', None)
+        dbname = self.get('Database', {}).get('DBName', None)
+        if self.retrieve_ssm_params:
+            self.get_ssm_parameter(dbname)
+        return dbname
 
     @property
     def dbowner(self):
-        return self.get('Database', {}).get('User', None)
+        dbowner = self.get('Database', {}).get('User', None)
+        if self.retrieve_ssm_params:
+            self.get_ssm_parameter(dbowner)
+        return dbowner
 
     @property
     def with_database(self):
